@@ -1,0 +1,59 @@
+services:
+  db:
+    image: mysql:8.4
+    container_name: minibilling-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mini_billing
+      MYSQL_USER: mini
+      MYSQL_PASSWORD: secret
+    ports:
+      - "3307:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  backend:
+    build: ./backend
+    container_name: minibilling-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      APP_NAME: MiniBilling
+      APP_ENV: local
+      APP_DEBUG: "true"
+      APP_KEY: base64:qPjyFCDIs/m4Q9Fe90X8FT2SObOWyX/E2Uw22noZNcc=
+      APP_URL: http://localhost:8081
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: mini_billing
+      DB_USERNAME: mini
+      DB_PASSWORD: secret
+      SESSION_DRIVER: file
+      CACHE_STORE: file
+      QUEUE_CONNECTION: sync
+    ports:
+      - "8081:8000"
+    volumes:
+      - ./backend:/app
+    command: sh -c "php artisan migrate --force && php artisan db:seed --force && php artisan serve --host=0.0.0.0 --port=8000"
+
+  frontend:
+    build: ./frontend
+    container_name: minibilling-frontend
+    depends_on:
+      - backend
+    environment:
+      API_URL: http://backend:8000
+    ports:
+      - "3001:3000"
+
+volumes:
+  dbdata:
